@@ -1,0 +1,122 @@
+name: Linux Ubuntu Desktop - RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ubuntu-desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      # ====================================================
+      # إعدادات المستخدم (كلمة المرور)
+      # ====================================================
+      LINUX_USER: "runner"
+      LINUX_PASS: "Zxxz4444" 
+
+      # ====================================================
+      # خيارات المفاتيح والروابط (نفس المنطق السابق)
+      # ====================================================
+      KEY_CHOICE: "1"
+      APP_BUNDLE_URL: "https://tinyurl.com/appk5214s"
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ====================================================
+      # 1. تحديث النظام وتثبيت الواجهة الرسومية (XFCE) و RDP
+      # ====================================================
+      - name: Install Desktop Environment (XFCE4) & XRDP
+        run: |
+          echo "==== INSTALLING XFCE4 & XRDP ===="
+          sudo apt-get update
+          # تثبيت الواجهة الخفيفة XFCE وأدوات RDP
+          sudo apt-get install -y xfce4 xfce4-goodies xrdp
+          
+          # إعداد XRDP ليستخدم جلسة XFCE
+          echo "xfce4-session" > ~/.xsession
+          
+          # تعديل صلاحيات الخدمة
+          sudo service xrdp start
+          
+          echo "==== SETTING PASSWORD ===="
+          # تعيين كلمة المرور للمستخدم الحالي (runner)
+          echo "$LINUX_USER:$LINUX_PASS" | sudo chpasswd
+          echo "Password set successfully for user: $LINUX_USER"
+
+      # ====================================================
+      # 2. تثبيت Tailscale
+      # ====================================================
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      # ====================================================
+      # 3. تحميل الحزمة واستخراج مفتاح Tailscale (Bash Script)
+      # ====================================================
+      - name: Download Bundle & Authenticate Tailscale
+        run: |
+          echo "==== DOWNLOADING BUNDLE ===="
+          mkdir -p /tmp/AppBundle
+          cd /tmp/AppBundle
+          
+          # تحميل الملف (استبدال Invoke-WebRequest بـ curl)
+          curl -L "$APP_BUNDLE_URL" -o bundle.zip
+          
+          echo "Extracting..."
+          unzip -o bundle.zip -d extracted
+          
+          # البحث عن ملف المفتاح
+          KEY_NAME="key${KEY_CHOICE}.txt"
+          KEY_FILE=$(find extracted -name "$KEY_NAME" | head -n 1)
+          
+          if [ -z "$KEY_FILE" ]; then
+            echo "Error: Key file $KEY_NAME not found!"
+            exit 1
+          fi
+          
+          echo "Found key file: $KEY_FILE"
+          
+          # قراءة وفك تشفير Base64 (ترجمة المنطق من PowerShell)
+          ENCODED_CONTENT=$(cat "$KEY_FILE" | tr -d '[:space:]')
+          REAL_KEY=$(echo "$ENCODED_CONTENT" | base64 -d)
+          
+          if [ -z "$REAL_KEY" ]; then
+            echo "Error: Failed to decode key."
+            exit 1
+          fi
+          
+          # إخفاء المفتاح في السجلات
+          echo "Key decoded successfully."
+          
+          # الاتصال بـ Tailscale
+          HOSTNAME="Ubuntu-RDP-$GITHUB_RUN_NUMBER"
+          echo "Connecting Tailscale as $HOSTNAME..."
+          
+          sudo tailscale up --authkey="$REAL_KEY" --hostname="$HOSTNAME" --ssh
+          
+          # عرض الـ IP
+          TS_IP=$(tailscale ip -4)
+          echo "============================================="
+          echo "SUCCESS! Machine IP: $TS_IP"
+          echo "Username: $LINUX_USER"
+          echo "Password: $LINUX_PASS"
+          echo "============================================="
+
+      # ====================================================
+      # 4. إبقاء الجلسة تعمل (Loop)
+      # ====================================================
+      - name: Keep Session Alive
+        run: |
+          echo "Session is live. Connect via RDP using the Tailscale IP."
+          echo "Use username: runner"
+          echo "Use password: (The one you set above)"
+          
+          # حلقة لا نهائية لمدة 6 ساعات (360 دقيقة)
+          END=$((SECONDS+21600))
+          while [ $SECONDS -lt $END ]; do
+              sleep 60
+              echo "Still alive... ($(( (END - SECONDS) / 60 )) min remaining)"
+          done
