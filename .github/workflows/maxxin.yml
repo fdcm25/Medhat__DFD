@@ -1,0 +1,55 @@
+name: Ubuntu RDP - Playit (No Card)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ubuntu-playit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      aa2: "XCDOOD"
+      aa3: "Zxxz4444"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. تثبيت الواجهة الرسومية (XFCE) و XRDP
+      - name: Install Desktop & XRDP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xfce4 xfce4-goodies xrdp
+          sudo sed -i.bak '/fi/a xfce4-session \n' /etc/xrdp/startwm.sh
+          sudo service xrdp start
+          echo "XRDP Started"
+
+      # 2. إعداد المستخدم
+      - name: Create User
+        run: |
+          sudo useradd -m -s /bin/bash $aa2
+          sudo usermod -aG sudo $aa2
+          echo "$aa2:$aa3" | sudo chpasswd
+          echo "runner:$aa3" | sudo chpasswd
+
+      # 3. تشغيل Playit.gg (بديل Ngrok المجاني)
+      - name: Start Playit & Connect
+        run: |
+          # تحميل Playit
+          curl -SsL https://playit-cloud.s3.amazonaws.com/setup/playit-linux_64-0.15.26 -o playit
+          chmod +x playit
+          
+          echo "=========================================================="
+          echo "                   HOW TO CONNECT"
+          echo "=========================================================="
+          echo "1. Wait for the link to appear below."
+          echo "2. Click the link (https://playit.gg/claim/...)."
+          echo "3. In the browser, click 'Add Tunnel' -> select 'Custom' or 'RDP'."
+          echo "4. Set Local Address to: 127.0.0.1 and Port to: 3389"
+          echo "5. Playit will give you an address (e.g., text.playit.gg:12345)."
+          echo "6. Use that address in Remote Desktop Connection."
+          echo "=========================================================="
+          
+          # تشغيل Playit
+          ./playit
